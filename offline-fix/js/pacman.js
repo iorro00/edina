@@ -22,7 +22,7 @@ $(document).ready(() => {
 
     //Caricamento dell'immagine del pacman
     const pacmanImage = new Image();
-    pacmanImage.src = "img/pacc.gif";
+    pacmanImage.src = "img/edapac.jpeg";
 
     //Dimensioni di un confine(e' un quadrato quindi serve solo un valore per la larghezza e l'altezza)
     const borderSize = 40;
