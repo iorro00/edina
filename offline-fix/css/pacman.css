@@ -1,5 +1,7 @@
 body {
-  background-image: url("../img/sfondoblack.jpg");
+  background-image: url("../img/sfondoblack.png");
+  background-repeat: repeat;   /* esplicito, anche se è già il default */
+  background-size: 500px 500px; /* dimensione di UNA singola tile */
   margin: 0;
   overflow: hidden;
 }
@@ -216,7 +218,6 @@ canvas {
 .pacman {
   position: absolute;
   z-index: 100;
-  transform: rotate(180deg);
   height: 26%;
   right:108%;
 }

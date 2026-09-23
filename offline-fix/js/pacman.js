@@ -1,6 +1,7 @@
 $(document).ready(() => {
     //palline grosse
     var audio2 = document.getElementById("myAudio2");
+    var audio20 = document.getElementById("myAudio20");
 
     //game over
     var audio5 = document.getElementById("myAudio5");
@@ -22,7 +23,68 @@ $(document).ready(() => {
 
     //Caricamento dell'immagine del pacman
     const pacmanImage = new Image();
-    pacmanImage.src = "img/edapac.jpeg";
+    pacmanImage.src = "img/edapac.png";
+
+    //Caricamento dell'immagine dei pallini
+    const littlePotatoImage = new Image();
+    littlePotatoImage.src = "img/littlePotato.png";
+
+    //Caricamento delle immagini dei fantasmi
+    const ghostImages = {
+        red: new Image(),
+        pink: new Image(),
+        cyan: new Image(),
+        green: new Image()
+    };
+    ghostImages.red.src = "img/chatgpt.png";
+    ghostImages.pink.src = "img/claude-ai_thumb.png";
+    ghostImages.cyan.src = "img/gemini.webp";
+    ghostImages.green.src = "img/copilot.png";
+
+    //Immagini dei fantasmi quando sono spaventati
+    const scaredGhostImages = {
+        red: new Image(),
+        pink: new Image(),
+        cyan: new Image(),
+        green: new Image()
+    };
+    scaredGhostImages.red.src = "img/chatgptpaura.png";
+    scaredGhostImages.pink.src = "img/cloudepaura.png";
+    scaredGhostImages.cyan.src = "img/geminipaura.png";
+    scaredGhostImages.green.src = "img/copilotpaure.png";
+
+    //Sprite ridimensionati una sola volta per alleggerire il ciclo di gioco
+    const spriteCache = new WeakMap();
+    function getCachedSprite(image, size, rounded = false) {
+        if (!image.complete || image.naturalWidth === 0) {
+            return image;
+        }
+
+        let sizeCache = spriteCache.get(image);
+        if (!sizeCache) {
+            sizeCache = new Map();
+            spriteCache.set(image, sizeCache);
+        }
+
+        const cacheKey = `${size}-${rounded}`;
+        if (!sizeCache.has(cacheKey)) {
+            const sprite = document.createElement("canvas");
+            sprite.width = Math.ceil(size);
+            sprite.height = Math.ceil(size);
+            const spriteContext = sprite.getContext("2d");
+
+            if (rounded) {
+                spriteContext.beginPath();
+                spriteContext.roundRect(0, 0, sprite.width, sprite.height, 4);
+                spriteContext.clip();
+            }
+
+            spriteContext.drawImage(image, 0, 0, sprite.width, sprite.height);
+            sizeCache.set(cacheKey, sprite);
+        }
+
+        return sizeCache.get(cacheKey);
+    }
 
     //Dimensioni di un confine(e' un quadrato quindi serve solo un valore per la larghezza e l'altezza)
     const borderSize = 40;
@@ -33,11 +95,15 @@ $(document).ready(() => {
     //La quantita' verticale dei quadrati
     const borderAmountVertical = 30;
 
+    //Moltiplicatore della velocita': 1 = velocita' del commit originale
+    const speedMultiplier = 1;
+
     //La velocita' del pacman
-    const pacmanSpeed = 4;
+    const pacmanSpeed = 4 * speedMultiplier;
 
     //La velocita' dei fantasmi
-    const ghostSpeed = pacmanSpeed - 1;
+    const baseGhostSpeed = pacmanSpeed - 1;
+    let ghostSpeed = baseGhostSpeed;
 
     //Il raggio del pacman
     const pacmanRadius = 18;
@@ -67,6 +133,9 @@ $(document).ready(() => {
     //Impostazione della grandezza e altezza del tag canvas
     canvas.width = borderAmountHorizontal * borderSize - 240;
     canvas.height = borderAmountVertical * borderSize - 270;
+
+    let bordersLayer = null;
+    let pelletsLayer = null;
 
     //Punteggio del giocatore
     let score = 0;
@@ -169,27 +238,42 @@ $(document).ready(() => {
     }
 
     //La funzione per disegnare i rettagoli
-    function createRectangle(x, y, width, height, color) {
-        canvasContext.fillStyle = color;
-        canvasContext.fillRect(x, y, width, height);
+    function createRectangle(drawContext, x, y, width, height, color) {
+        drawContext.fillStyle = color;
+        drawContext.fillRect(x, y, width, height);
     }
 
     //La funzione per disegnare i confini
     function drawBorders() {
+        if (!bordersLayer) {
+            bordersLayer = document.createElement("canvas");
+            bordersLayer.width = canvas.width;
+            bordersLayer.height = canvas.height;
+            const bordersContext = bordersLayer.getContext("2d");
+
+            drawBordersToContext(bordersContext);
+        }
+
+        canvasContext.drawImage(bordersLayer, 0, 0);
+    }
+
+    function drawBordersToContext(drawContext) {
         for (let i = 0; i < map.length; i++) {
             for (let j = 0; j < map[0].length; j++) {
                 //se il valore è 1 disegna il rettangolo
                 if (map[i][j] == 1) {
                     createRectangle(
+                        drawContext,
                         j * borderSize,     //x
                         i * borderSize,     //y
                         borderSize,         //width
                         borderSize,         //height
-                        "rgb(40, 33, 204)"  //color
+                        "rgb(201, 204, 33)"  //color
                     );
                     //se c'è un confine sotto disegna un rettangolo nero e lo sposta così da rimuovere il lato tra due confini
                     if (j > 0 && map[i][j - 1] == 1) {
                         createRectangle(
+                            drawContext,
                             j * borderSize,
                             i * borderSize + borderOffset,
                             borderSpaceWidth + borderOffset,
@@ -201,6 +285,7 @@ $(document).ready(() => {
                     //se c'è un confine sopra disegna un rettangolo nero e lo sposta così da rimuovere il lato tra due confini
                     if (j < map[0].length - 1 && map[i][j + 1] == 1) {
                         createRectangle(
+                            drawContext,
                             j * borderSize + borderOffset,
                             i * borderSize + borderOffset,
                             borderSpaceWidth + borderOffset,
@@ -212,6 +297,7 @@ $(document).ready(() => {
                     //se c'è un confine a destra disegna un rettangolo nero e lo sposta così da rimuovere il lato tra due confini
                     if (i < map.length - 1 && map[i + 1][j] == 1) {
                         createRectangle(
+                            drawContext,
                             j * borderSize + borderOffset,
                             i * borderSize + borderOffset,
                             borderSpaceWidth,
@@ -223,6 +309,7 @@ $(document).ready(() => {
                     //se c'è un confine a sinistra disegna un rettangolo nero e lo sposta così da rimuovere il lato tra due confini
                     if (i > 0 && map[i - 1][j] == 1) {
                         createRectangle(
+                            drawContext,
                             j * borderSize + borderOffset,
                             i * borderSize,
                             borderSpaceWidth,
@@ -251,7 +338,11 @@ $(document).ready(() => {
         //il metodo per disegnare l'immagine del pacman
         draw() {
             const size = this.radius * 2;
-            canvasContext.drawImage(pacmanImage, this.x - this.radius, this.y - this.radius, size, size);
+            const imageX = this.x - this.radius;
+            const imageY = this.y - this.radius;
+
+            const sprite = getCachedSprite(pacmanImage, size, true);
+            canvasContext.drawImage(sprite, imageX, imageY, size, size);
         }
 
         //il metodo per aggiornare la posizione del pacman
@@ -336,31 +427,18 @@ $(document).ready(() => {
         });
     }
 
-    //La funzione che cambia la velocità di pacman in base alla direzione premuta, 
+    //La funzione che cambia la velocità di pacman in base alla direzione premuta,
     //controllando che tasta sia premuta ultimamente
-    //cambia anche il colore della freccia, la direzione di cui è attiva
     function pacmanSetSpeed() {
         $(".arrow-button").css("background-color", "white");
 
         if (directions.up.pressed && lastDirection == "up") {
             for (let i = 0; i < borders.length; i++) {
                 const border = borders[i];
-
-                //passa un pacman con la velocità impostata a quella che avrebbe se premessimo il tasto
                 if (isColliding({ ...pacman, speedX: 0, speedY: -pacmanSpeed }, border)) {
-                    //se ci sarà una collisione, la velocità di pacman viene impostata a 0
-                    //così da non farlo andare nella direzione del confine 
-                    //e non attivare la funzione di collisione che lo fermerebbe
                     pacman.speedY = 0;
-
-                    if (enableDebug) {
-                        console.log("future border collision");
-                    }
-
                     break;
                 } else {
-                    //se non ci sarà una collisione, la velocità di pacman
-                    //viene impostata a quella che avrebbe se premessimo il tasto
                     pacman.speedY = -pacmanSpeed;
                 }
             }
@@ -368,14 +446,8 @@ $(document).ready(() => {
         } else if (directions.down.pressed && lastDirection == "down") {
             for (let i = 0; i < borders.length; i++) {
                 const border = borders[i];
-
                 if (isColliding({ ...pacman, speedX: 0, speedY: pacmanSpeed }, border)) {
                     pacman.speedY = 0;
-
-                    if (enableDebug) {
-                        console.log("future border collision");
-                    }
-
                     break;
                 } else {
                     pacman.speedY = pacmanSpeed;
@@ -385,14 +457,8 @@ $(document).ready(() => {
         } else if (directions.left.pressed && lastDirection == "left") {
             for (let i = 0; i < borders.length; i++) {
                 const border = borders[i];
-
                 if (isColliding({ ...pacman, speedX: -pacmanSpeed, speedY: 0 }, border)) {
                     pacman.speedX = 0;
-
-                    if (enableDebug) {
-                        console.log("future border collision");
-                    }
-
                     break;
                 } else {
                     pacman.speedX = -pacmanSpeed;
@@ -402,14 +468,8 @@ $(document).ready(() => {
         } else if (directions.right.pressed && lastDirection == "right") {
             for (let i = 0; i < borders.length; i++) {
                 const border = borders[i];
-
                 if (isColliding({ ...pacman, speedX: pacmanSpeed, speedY: 0 }, border)) {
                     pacman.speedX = 0;
-
-                    if (enableDebug) {
-                        console.log("future border collision");
-                    }
-
                     break;
                 } else {
                     pacman.speedX = pacmanSpeed;
@@ -456,13 +516,17 @@ $(document).ready(() => {
             this.radius = radius;
         }
 
-        //il metodo per disegnare un cerchio
-        draw() {
-            canvasContext.beginPath();
-            canvasContext.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-            canvasContext.fillStyle = "orange";
-            canvasContext.fill();
-            canvasContext.closePath();
+        //il metodo per disegnare l'immagine del pallino
+        draw(drawContext = canvasContext) {
+            const size = this.radius * 2 + 4;
+            const sprite = getCachedSprite(littlePotatoImage, size);
+            drawContext.drawImage(
+                sprite,
+                this.x - size / 2,
+                this.y - size / 2,
+                size,
+                size
+            );
         }
     }
 
@@ -485,9 +549,20 @@ $(document).ready(() => {
 
     //La funzione che disegna le palline
     function drawPellets() {
-        pellets.forEach((pellet) => {
-            pellet.draw();
-        });
+        if (!littlePotatoImage.complete || littlePotatoImage.naturalWidth === 0) {
+            pellets.forEach((pellet) => pellet.draw());
+            return;
+        }
+
+        if (!pelletsLayer) {
+            pelletsLayer = document.createElement("canvas");
+            pelletsLayer.width = canvas.width;
+            pelletsLayer.height = canvas.height;
+            const pelletsContext = pelletsLayer.getContext("2d");
+            pellets.forEach((pellet) => pellet.draw(pelletsContext));
+        }
+
+        canvasContext.drawImage(pelletsLayer, 0, 0);
     }
 
     //La funzione che controlla se pacman collide con una pallina
@@ -506,6 +581,7 @@ $(document).ready(() => {
 
                 //cancella la pallina corrente dall'array
                 pellets.splice(i, 1);
+                pelletsLayer = null;
 
                 //condizone per la vittoria
                 if (pellets.length == 0) {
@@ -521,6 +597,7 @@ $(document).ready(() => {
                 if (pellet.radius == pacmanRadius / 1.5) {
 
                     audio7.play();
+                    audio20.play();
 
                     //cambia lo stato di tutti i fantasmi in "spaventato"
                     ghosts.forEach((ghost) => {
@@ -568,21 +645,25 @@ $(document).ready(() => {
             this.speedY = speedY;
             this.radius = pacmanRadius;
             this.color = color;
+            this.image = ghostImages[color];
+            this.scaredImage = scaredGhostImages[color];
             //un array con le collisioni passate
             this.pastCollisions = [];
             this.isScared = false;
         }
 
-        //il metodo per disegnare un cerchio
+        //il metodo per disegnare l'immagine del fantasma
         draw() {
-            canvasContext.beginPath();
-            canvasContext.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-            if (!this.isScared)
-                canvasContext.fillStyle = this.color;
-            else
-                canvasContext.fillStyle = "purple";
-            canvasContext.fill();
-            canvasContext.closePath();
+            const size = this.radius * 2;
+            const image = this.isScared ? this.scaredImage : this.image;
+            const sprite = getCachedSprite(image, size);
+            canvasContext.drawImage(
+                sprite,
+                this.x - this.radius,
+                this.y - this.radius,
+                size,
+                size
+            );
         }
 
         //il metodo per aggiornare la posizione di un fantasma
@@ -758,7 +839,9 @@ $(document).ready(() => {
             }
             //se un fantasma è spaventato e collide con pacman
             if (isCollidingCircle(ghost, pacman) && ghost.isScared) {
+                
                 audio2.play();
+
                 //memorizza il colore del fantasma morto
                 let deadGhostColor = ghost.color;
                 ghosts.splice(i, 1);
@@ -815,15 +898,18 @@ $(document).ready(() => {
     function resetGame(changeLives) {
         if (changeLives)
             lives--;
+        pelletsLayer = null;
         //se le vite non devono essere cambiate(=> il giocatore ha raccolto tutte le palline)
         if (!changeLives) {
             pellets = [];
+            pelletsLayer = null;
             createPelletsArray();
         }
         //se il giocatore ha perso tutte le vite
         if (lives == 0) {
             lives = 3;
             score = 0;
+            ghostSpeed = baseGhostSpeed;
             $("#score").text(score);
             pellets = [];
             createPelletsArray();
@@ -874,6 +960,7 @@ $(document).ready(() => {
     //Animazione per il cambio di livello
     function nextlevel(){
         cancelAnimationFrame(frameID);//ferma il gioco
+        ghostSpeed *= 1.08;
         $(".next-level").text("N");
         audio8.play();
         setTimeout(function() {

@@ -15,7 +15,6 @@ body, html {
 .pacman {
     position: absolute;
     z-index: 100;
-    transform: rotate(180deg);
     height: 26%;
     right:108%;
 }
